@@ -350,12 +350,12 @@ function parseRegulationHtml(
   $("script, style, nav, header, footer").remove();
 
   // Get the main content body
-  const body = $("body").length > 0 ? $("body") : $.root();
+  const bodyEl = ($("body").length > 0 ? $("body") : $.root()) as unknown as ReturnType<typeof $>;
 
   // Collect all text nodes in document order by iterating block-level elements
   const blocks: Array<{ tag: string; text: string; html: string }> = [];
 
-  body.find("p, div, h1, h2, h3, h4, h5, h6, td, li, span, blockquote, pre").each((_i, el) => {
+  bodyEl.find("p, div, h1, h2, h3, h4, h5, h6, td, li, span, blockquote, pre").each((_i, el) => {
     const $el = $(el);
     const tagName = "tagName" in el ? (el.tagName as string) : "unknown";
     // Skip nested elements (only process leaf-level blocks)
