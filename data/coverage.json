@@ -1,0 +1,33 @@
+{
+  "data_age": "2025-01-15",
+  "corpus": "Italian financial regulation — CONSOB, Banca d'Italia, IVASS",
+  "sources": [
+    {
+      "id": "CONSOB_EMITTENTI",
+      "name": "CONSOB Regolamento Emittenti",
+      "url": "https://www.consob.it/web/area-pubblica/regolamenti"
+    },
+    {
+      "id": "CONSOB_INTERMEDIARI",
+      "name": "CONSOB Regolamento Intermediari",
+      "url": "https://www.consob.it/web/area-pubblica/regolamenti"
+    },
+    {
+      "id": "BDI_285",
+      "name": "Banca d'Italia Circolare 285",
+      "url": "https://www.bancaditalia.it/compiti/vigilanza/normativa/index.html"
+    },
+    {
+      "id": "BDI_288",
+      "name": "Banca d'Italia Circolare 288",
+      "url": "https://www.bancaditalia.it/compiti/vigilanza/normativa/index.html"
+    },
+    {
+      "id": "IVASS_38",
+      "name": "IVASS Regolamento 38",
+      "url": "https://www.ivass.it/normativa/nazionale/secondaria-ivass/regolamenti/"
+    }
+  ],
+  "frozen": false,
+  "source_type": "live"
+}

@@ -16,7 +16,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -43,6 +43,33 @@ try {
 }
 
 const SERVER_NAME = "italian-financial-regulation-mcp";
+
+// ─── Coverage metadata ───────────────────────────────────────────────────────
+
+let DATA_AGE = "unknown";
+try {
+  const coveragePath = join(__dirname, "..", "data", "coverage.json");
+  if (existsSync(coveragePath)) {
+    const coverage = JSON.parse(readFileSync(coveragePath, "utf8")) as { data_age: string };
+    DATA_AGE = coverage.data_age;
+  }
+} catch {
+  // fallback
+}
+
+const DISCLAIMER =
+  "This tool provides informational access to Italian financial regulations. It is not legal advice. Always verify against official sources.";
+const COPYRIGHT =
+  "© CONSOB, Banca d'Italia, IVASS — official regulatory text. Aggregated for informational use under applicable public-access rules.";
+
+function responseMeta(sourceUrl?: string) {
+  return {
+    data_age: DATA_AGE,
+    disclaimer: DISCLAIMER,
+    copyright: COPYRIGHT,
+    ...(sourceUrl !== undefined && { source_url: sourceUrl }),
+  };
+}
 
 // ─── Tool definitions ────────────────────────────────────────────────────────
 
@@ -152,6 +179,16 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "it_fin_check_data_freshness",
+    description:
+      "Verifica la data di aggiornamento dei dati, il tipo di sorgente (live/frozen) e l'elenco dei sourcebook disponibili. Strumento meta obbligatorio per verificare la freschezza dei dati prima di utilizzare risposte regolamentari.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 // ─── Zod schemas for argument validation ────────────────────────────────────
@@ -188,9 +225,14 @@ function textContent(data: unknown) {
   };
 }
 
-function errorContent(message: string) {
+function errorContent(message: string, errorType: string = "internal_error") {
   return {
-    content: [{ type: "text" as const, text: message }],
+    content: [
+      {
+        type: "text" as const,
+        text: JSON.stringify({ error: message, _error_type: errorType, _meta: responseMeta() }),
+      },
+    ],
     isError: true as const,
   };
 }
@@ -219,7 +261,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           status: parsed.status,
           limit: parsed.limit,
         });
-        return textContent({ results, count: results.length });
+        const resultsWithCitation = results.map((r) => ({
+          ...r,
+          _citation: buildCitation(
+            `${r.sourcebook_id} ${r.reference}`,
+            String(r.title ?? `${r.sourcebook_id} ${r.reference}`),
+            "it_fin_get_regulation",
+            { sourcebook: r.sourcebook_id, reference: r.reference },
+          ),
+        }));
+        return textContent({ results: resultsWithCitation, count: resultsWithCitation.length, _meta: responseMeta() });
       }
 
       case "it_fin_get_regulation": {
@@ -228,9 +279,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!provision) {
           return errorContent(
             `Disposizione non trovata: ${parsed.sourcebook} ${parsed.reference}`,
+            "not_found",
           );
         }
-        const prov = provision as Record<string, unknown>;
+        const prov = provision as unknown as Record<string, unknown>;
         return textContent({
           ...provision,
           _citation: buildCitation(
@@ -238,13 +290,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             String(prov.title ?? `${parsed.sourcebook} ${parsed.reference}`),
             "it_fin_get_regulation",
             { sourcebook: parsed.sourcebook, reference: parsed.reference },
+            "https://www.consob.it/",
           ),
+          _meta: responseMeta("https://www.consob.it/"),
         });
       }
 
       case "it_fin_list_sourcebooks": {
         const sourcebooks = listSourcebooks();
-        return textContent({ sourcebooks, count: sourcebooks.length });
+        return textContent({ sourcebooks, count: sourcebooks.length, _meta: responseMeta() });
       }
 
       case "it_fin_search_enforcement": {
@@ -254,13 +308,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           action_type: parsed.action_type,
           limit: parsed.limit,
         });
-        return textContent({ results, count: results.length });
+        const resultsWithCitation = results.map((r) => ({
+          ...r,
+          _citation: buildCitation(
+            String(r.reference_number ?? r.firm_name),
+            r.firm_name,
+            "it_fin_search_enforcement",
+            { query: parsed.query },
+          ),
+        }));
+        return textContent({ results: resultsWithCitation, count: resultsWithCitation.length, _meta: responseMeta() });
       }
 
       case "it_fin_check_currency": {
         const parsed = CheckCurrencyArgs.parse(args);
         const currency = checkProvisionCurrency(parsed.reference);
-        return textContent(currency);
+        return textContent({ ...currency, _meta: responseMeta() });
       }
 
       case "it_fin_about": {
@@ -275,15 +338,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             "IVASS — Istituto per la Vigilanza sulle Assicurazioni (https://www.ivass.it/)",
           ],
           tools: TOOLS.map((t) => ({ name: t.name, description: t.description })),
+          _meta: responseMeta(),
+        });
+      }
+
+      case "it_fin_check_data_freshness": {
+        return textContent({
+          data_age: DATA_AGE,
+          source_type: "live",
+          sourcebooks: listSourcebooks().map((s) => s.id),
+          _meta: responseMeta(),
         });
       }
 
       default:
-        return errorContent(`Strumento sconosciuto: ${name}`);
+        return errorContent(`Strumento sconosciuto: ${name}`, "unknown_tool");
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return errorContent(`Errore nell'esecuzione di ${name}: ${message}`);
+    return errorContent(`Errore nell'esecuzione di ${name}: ${message}`, "internal_error");
   }
 });
 
