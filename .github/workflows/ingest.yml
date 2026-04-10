@@ -1,0 +1,42 @@
+name: Monthly Data Ingest
+
+on:
+  schedule:
+    - cron: "0 3 1 * *"   # 1st of each month at 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    name: Ingest regulatory data
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ingest script
+        run: npx tsx scripts/ingest-consob.ts
+
+      - name: Update data_age in coverage.json
+        run: |
+          TODAY=$(date +%Y-%m-%d)
+          jq --arg age "$TODAY" '.data_age = $age' data/coverage.json > data/coverage.json.tmp
+          mv data/coverage.json.tmp data/coverage.json
+          echo "Updated data_age to $TODAY"
+
+      - name: Commit updated coverage.json and database
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update data_age after monthly ingest [skip ci]"
+          file_pattern: "data/coverage.json data/*.db"

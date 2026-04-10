@@ -1,0 +1,26 @@
+name: Check Data Freshness
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Every Monday at 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check-freshness:
+    name: Check data age
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check data_age
+        run: |
+          DATA_AGE=$(jq -r '.data_age' data/coverage.json)
+          echo "data_age: $DATA_AGE"
+
+          CUTOFF=$(date -d '6 months ago' +%Y-%m-%d 2>/dev/null || date -v-6m +%Y-%m-%d)
+          if [[ "$DATA_AGE" < "$CUTOFF" ]]; then
+            echo "::warning::Data is older than 6 months (data_age=$DATA_AGE, cutoff=$CUTOFF). Consider running the ingest workflow."
+          else
+            echo "Data is fresh (data_age=$DATA_AGE)."
+          fi
