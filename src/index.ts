@@ -230,7 +230,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             `Disposizione non trovata: ${parsed.sourcebook} ${parsed.reference}`,
           );
         }
-        const prov = provision as Record<string, unknown>;
+        const prov = provision as unknown as Record<string, unknown>;
         return textContent({
           ...provision,
           _citation: buildCitation(
